@@ -17,3 +17,10 @@ test('render joins excerpts, equalizes loudness, and limits peaks',()=>{const si
 test('WAV header and stereo PCM payload are valid',()=>{const data=wavBytes([new Float32Array([0,.5,-1]),new Float32Array([0,-.5,1])],44100),v=new DataView(data);assert.equal(new TextDecoder().decode(data.slice(0,4)),'RIFF');assert.equal(v.getUint16(22,true),2);assert.equal(v.getUint32(24,true),44100);assert.equal(v.getUint32(40,true),12);assert.equal(v.getInt16(52,true),-32768);assert.equal(v.getInt16(54,true),32767);});
 
 test('a pronounced energy lift selects a rhythmic handoff without asking',()=>{const a=track('a'),b=track('b');a.analysis.energy=a.analysis.energy.map((v,i)=>i>=100?.55:i>=96?.15:v);const d=transitionDecision(a,b);assert.equal(d.offerChoice,false);assert.equal(d.style,'energy');assert.equal(planMix([a,b],50,{'a:b':'smooth'}).clips[0].style,'energy');});
+test('keeping original tempo disables retiming for that song while preserving downstream planning',()=>{
+ const ts=[track('a'),track('b',{analysis:{...track('b').analysis,bpm:124}}),track('c',{analysis:{...track('c').analysis,bpm:126}})];
+ const matched=planMix(ts,100),original=planMix(ts,100,{}, {b:'original'});
+ assert.notEqual(matched.clips[1].rate,1);assert.equal(original.clips[1].rate,1);
+ assert.ok(Math.abs(original.clips[2].rate-124/126)<.001);
+ assert.notEqual(original.duration,matched.duration);
+});

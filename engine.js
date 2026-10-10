@@ -124,7 +124,7 @@ export function transitionDecision(a,b) {
   const offerChoice=Boolean(cleanPulse&&mismatch<.20&&energyFit&&distinct&&a.end-a.start>=8&&b.end-b.start>=8);
   return {offerChoice,style:offerChoice?'energy':'smooth',reason:offerChoice?'Two distinct ways to carry the momentum.':'A smooth blend fits these moments best.'};
 }
-export function planMix(tracks, flex, choices={}) {
+export function planMix(tracks, flex, choices={}, tempoChoices={}) {
   if(tracks.length<2)throw new Error('Add at least two songs to make a mix.');
   flex=clamp(flex,0,100);
   const clips=tracks.map(t=>{
@@ -151,6 +151,7 @@ export function planMix(tracks, flex, choices={}) {
       const desired=target/equivalent;
       right.rate=Math.abs(desired-1)<=.20?clamp(desired,1-maxShift,1+maxShift):1;
     }
+    if(tempoChoices[b.id]==='original')right.rate=1;
     const beat=60/(bpmA*left.rate||120);
     const intended=style==='energy'?Math.max(.12,beat*.5):beat*8;
     left.overlap=Math.min(intended,(left.end-left.start)/left.rate*.25,(right.end-right.start)/right.rate*.25);
