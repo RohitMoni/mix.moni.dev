@@ -4,7 +4,7 @@ A mobile-friendly, browser-only mix maker. Live target: https://mix.moni.dev
 
 ## Use it
 
-1. Add YouTube reference links and attach the corresponding audio files, or add MP3/WAV audio directly. Video titles are fetched automatically; names remain editable. The converter link opens an external website; this app does not download or upload audio.
+1. Add YouTube reference links and attach the corresponding audio files, or add MP3/WAV audio directly. Video titles are fetched automatically; names remain editable. YouTube links are references only. Supply your own source audio; this app does not download or upload audio.
 2. Name and order the songs, then choose each song's excerpt with start/end times (`m:ss` or seconds).
 3. Leave creative freedom at its default midpoint, or choose fixed/flexible.
 4. Create the mix. The results show a simplified waveform from the actual rendered audio, colored song sections, transition markers, playback, and downloads.
@@ -16,11 +16,13 @@ Try a demo generates two original loops locally. It never replaces an existing l
 ## Mixing engine
 
 - Local onset-envelope autocorrelation estimates tempo and beat phase. Repeated accents estimate a four-beat boundary; quarter-second RMS windows estimate energy.
-- Flexibility controls timing adjustments up to ±8 seconds and tempo adjustments up to ±12%. Fixed preserves requested excerpt boundaries and tempo.
+- Flexibility controls timing changes, tempo adjustment, and optional rhythmic accents. Fixed allows ±1 second with original tempo and no added fills. The midpoint allows ±5 seconds and tempo adjustments up to ±8%; full flexibility allows ±10 seconds and tempo adjustments up to ±25%.
 - Transition planning looks for nearby rhythmic boundaries and compares local normalized energy. Quick handoffs and longer equal-power blends are the two styles.
+- Mix boundaries are handled separately: natural song starts/ends are preserved. Mid-song starts may align to a nearby rhythmic boundary and receive a short fade-in. Mid-song endings fade out by default; confident energy changes can support a clean cut. An ending note offers a fade/cut comparison only when both are plausible.
 - Uncertain rhythm estimates favor a smooth blend. Clear energy lifts may select a quick handoff automatically. A/B options require confident rhythms, compatible pace, sufficient energy, and a perceptible contrast.
 - The pace correction controls adjust the detected tempo by half/double, without directly speeding up the original song.
 - Tempo changes use waveform-similarity overlap-add to preserve pitch. Output uses bounded RMS gain adjustment and peak normalization.
+- High flexibility can add a short, locally synthesized percussion fill before a confidently rhythmic handoff. A result note compares it with a no-fill version and lets the user remove it. This is a simple generated accent, not a genre-aware custom fill composer.
 - Analysis, rendering, and MP3 encoding run in a Web Worker.
 
 This is a working first-version heuristic engine, not professional DJ mastering. Musical downbeats, phrases, and drops are not reliably identifiable from these estimates alone. It does not perform semantic drop detection, key matching, section repetition, stem separation, or extreme tempo transformations. Dense vocals and unfamiliar genres may need different excerpts. Conservative crossfades handle cases where rhythm estimates are uncertain.

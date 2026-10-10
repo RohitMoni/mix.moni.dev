@@ -1,4 +1,4 @@
-import { analyze, renderPrepared, wavBytes } from './engine.js';
+import { analyze, renderPrepared, wavBytes } from './engine.js?v=5';
 self.onmessage=async({data})=>{
   const {id,task,payload}=data;
   try {

@@ -124,7 +124,23 @@ export function transitionDecision(a,b) {
   const offerChoice=Boolean(cleanPulse&&mismatch<.20&&energyFit&&distinct&&a.end-a.start>=8&&b.end-b.start>=8);
   return {offerChoice,style:offerChoice?'energy':'smooth',reason:offerChoice?'Two distinct ways to carry the momentum.':'A smooth blend fits these moments best.'};
 }
-export function planMix(tracks, flex, choices={}, tempoChoices={}) {
+export const timingLeeway=flex=>{const f=clamp(flex,0,100);return f<=50?1+f*.08:5+(f-50)*.1;};
+export const tempoLeeway=flex=>{const f=clamp(flex,0,100);return f<=50?f/50*.08:.08+(f-50)/50*.17;};
+export function endingDecision(track,flex){
+  if(track.end>=track.duration-.01)return {style:'natural',offerChoice:false,cutTime:track.duration};
+  const a=track.analysis,bpm=(a?.bpm||0)*(track.pace||1),margin=timingLeeway(flex),rms=Math.max(.01,a?.rms||0);
+  let cutTime=track.end,bestDrop=0;
+  if(bpm&&a.confidence>.42){
+    const bar=240/bpm,origin=a.barOffset||0;
+    for(let k=Math.floor((track.end-margin-origin)/bar);k<=Math.ceil((track.end+margin-origin)/bar);k++){
+      const t=origin+k*bar;if(t<track.start+3||t>track.duration||Math.abs(t-track.end)>margin+.0001)continue;
+      const drop=(level(a,t-.25)-level(a,t+.25))/rms;
+      if(drop>bestDrop){bestDrop=drop;cutTime=t;}
+    }
+  }
+  return {style:bestDrop>.75?'cut':'fade',offerChoice:bestDrop>.25&&bestDrop<=.75,cutTime};
+}
+export function planMix(tracks, flex, choices={}, tempoChoices={}, boundaryChoices={}, fillChoices={}) {
   if(tracks.length<2)throw new Error('Add at least two songs to make a mix.');
   flex=clamp(flex,0,100);
   const clips=tracks.map(t=>{
@@ -132,7 +148,10 @@ export function planMix(tracks, flex, choices={}, tempoChoices={}) {
     if(!Number.isFinite(t.start)||!Number.isFinite(t.end)||t.start<0||t.end>t.duration+.01||t.end-t.start<3)throw new Error(`Choose at least three seconds within ${t.name}.`);
     return {id:t.id,start:t.start,end:Math.min(t.end,t.duration),rate:1,overlap:0,style:null};
   });
-  const margin=flex/100*8;
+  const margin=timingLeeway(flex);
+  const first=clips[0],opening=tracks[0];
+  if(opening.start>0)first.start=snapped(opening.start,opening,margin,null,0,opening.end-3);
+  first.fadeIn=first.start<=.01?0:Math.min(.25,(first.end-first.start)/first.rate*.1);
   for(let i=0;i<tracks.length-1;i++){
     const a=tracks[i],b=tracks[i+1], left=clips[i],right=clips[i+1];
     const key=`${a.id}:${b.id}`, recommendation=transitionDecision(a,b);
@@ -147,15 +166,26 @@ export function planMix(tracks, flex, choices={}, tempoChoices={}) {
       const equivalent=candidates.reduce((best,n)=>Math.abs(n-bpmA)<Math.abs(best-bpmA)?n:best,bpmB);
       const target=bpmA*left.rate;
       // No extreme retiming: near tempos converge, distant tempos keep their character.
-      const maxShift=flex/100*.12;
+      const maxShift=tempoLeeway(flex);
       const desired=target/equivalent;
-      right.rate=Math.abs(desired-1)<=.20?clamp(desired,1-maxShift,1+maxShift):1;
+      right.rate=Math.abs(desired-1)<=.35?clamp(desired,1-maxShift,1+maxShift):1;
     }
     if(tempoChoices[b.id]==='original')right.rate=1;
     const beat=60/(bpmA*left.rate||120);
     const intended=style==='energy'?Math.max(.12,beat*.5):beat*8;
+    if(flex>=75&&style==='energy'&&a.analysis.confidence>.55&&b.analysis.confidence>.55&&bpmA){
+      left.fill={seconds:beat,amount:.035};
+      if(fillChoices[key]==='off')left.fill=null;
+    }
     left.overlap=Math.min(intended,(left.end-left.start)/left.rate*.25,(right.end-right.start)/right.rate*.25);
   }
+  const last=clips.at(-1),ending={...tracks.at(-1),start:last.start},decision=endingDecision(ending,flex);
+  const style=decision.offerChoice?(boundaryChoices.end||decision.style):decision.style;
+  last.endingStyle=style;
+  if(style==='natural'){last.end=ending.duration;last.fadeOut=0;}
+  else if(style==='cut'){last.end=decision.cutTime;last.fadeOut=.015;}
+  else{last.fadeOut=Math.min(3,240/((ending.analysis.bpm||120)*(ending.pace||1)*last.rate),(last.end-last.start)/last.rate*.25);}
+  for(let i=0;i<clips.length-1;i++)clips[i].overlap=Math.min(clips[i].overlap,(clips[i].end-clips[i].start)/clips[i].rate*.25,(clips[i+1].end-clips[i+1].start)/clips[i+1].rate*.25);
   let duration=0;
   for(const clip of clips){duration+=(clip.end-clip.start)/clip.rate-clip.overlap;}
   if(duration>12*60)throw new Error('Keep the mix under 12 minutes for this browser version.');
@@ -206,13 +236,25 @@ export function renderPrepared(clips,sampleRate,onProgress=()=>{}) {
   const output=[new Float32Array(total),new Float32Array(total)];
   let offset=0;
   for(let k=0;k<prepared.length;k++){
-    const c=prepared[k],len=lengths[k],fadeIn=k>0?overlaps[k-1]:Math.min(Math.round(sampleRate*.015),len),fadeOut=k<prepared.length-1?overlaps[k]:Math.min(Math.round(sampleRate*.025),len);
+    const c=prepared[k],len=lengths[k],fadeIn=k>0?overlaps[k-1]:Math.min(Math.round(sampleRate*(c.fadeIn??.015)),len),fadeOut=k<prepared.length-1?overlaps[k]:Math.min(Math.round(sampleRate*(c.fadeOut??.025)),len);
     for(let i=0;i<len;i++){
       let g=c.gain;
       if(i<fadeIn)g*=k?Math.sin(i/fadeIn*Math.PI/2):i/fadeIn;
       if(i>=len-fadeOut)g*=k<prepared.length-1?Math.cos((i-(len-fadeOut))/fadeOut*Math.PI/2):(len-i-1)/fadeOut;
       output[0][offset+i]+=c.channels[0][i]*g;
       output[1][offset+i]+=(c.channels[1]||c.channels[0])[i]*g;
+    }
+    if(c.fill&&k<prepared.length-1){
+      const samples=Math.min(Math.round(c.fill.seconds*sampleRate),Math.floor(len*.2));
+      const end=offset+len-Math.round(overlaps[k]/2),start=Math.max(offset,end-samples);
+      let seed=1234567,previous=0;
+      for(let i=0;i<end-start;i++){
+        seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+        const noise=seed/4294967296*2-1,phase=(i/samples*4)%1;
+        const hat=(noise-previous)*Math.exp(-phase*18),envelope=Math.sin(Math.PI*i/Math.max(1,end-start));previous=noise;
+        const value=hat*c.fill.amount*envelope;
+        output[0][start+i]+=value;output[1][start+i]+=value;
+      }
     }
     offset+=len-overlaps[k];
   }
