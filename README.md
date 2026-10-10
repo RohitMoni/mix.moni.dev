@@ -4,7 +4,7 @@ A mobile-friendly, browser-only mix maker. Live target: https://mix.moni.dev
 
 ## Use it
 
-1. Add YouTube reference links and attach the corresponding audio files, or add MP3/WAV audio directly. The converter link opens an external website; this app does not download or upload audio.
+1. Add YouTube reference links and attach the corresponding audio files, or add MP3/WAV audio directly. Video titles are fetched automatically; names remain editable. The converter link opens an external website; this app does not download or upload audio.
 2. Name and order the songs, then choose each song's excerpt with start/end times (`m:ss` or seconds).
 3. Leave creative freedom at its default midpoint, or choose fixed/flexible.
 4. Transitions are automatic. When two plausible approaches differ meaningfully, listen to A/B previews and select a favorite. Otherwise, the app selects a transition and offers an optional preview. No waveform editor or manual transition-point controls.
@@ -28,7 +28,7 @@ This is a working first-version heuristic engine, not professional DJ mastering.
 
 IndexedDB stores the lineup, attached audio files, excerpt times, flexibility, and transition choices in this browser. Audio is never sent to a server. Clearing site data removes the project; browser storage may be evicted. Rendered output is not persisted: download it or render again after reloading. Storage errors are surfaced rather than silently claiming success.
 
-This version supports 12 songs, at most 15 minutes of attached source audio, 80 MB per file, and a rendered mix under 12 minutes. Browser memory limits apply; shorter excerpts and sources work best on phones. Audio decoding uses the browser's supported codecs. The app has no server or dedicated database. Fonts are fetched from Google Fonts, with system-font fallbacks.
+This version supports 12 songs, at most 15 minutes of attached source audio, 80 MB per file, and a rendered mix under 12 minutes. Browser memory limits apply; shorter excerpts and sources work best on phones. Audio decoding uses the browser's supported codecs. The app has no server or dedicated database. Fonts are fetched from Google Fonts, with system-font fallbacks. Video title lookup requests metadata from YouTube oEmbed, with Noembed as a fallback; only the reference link is sent, never attached audio. If both providers are unavailable, the track remains usable with an editable fallback name. Title lookups run in the background and preserve custom names. The UI leads with song import, uses compact track rows, and collapses extra track controls and transition previews.
 
 ## Development
 
@@ -46,7 +46,7 @@ The tests cover tempo fixtures, fixed/flexible planning, choice gating and autom
 
 ## GitHub Pages
 
-Settings → Pages → Deploy from a branch → **main**, **/ (root)**. The static files need no build. `.nojekyll` bypasses Jekyll. Set Custom domain to **mix.moni.dev**, add a DNS CNAME for **mix** pointing to **rohitmoni.github.io**, and enable Enforce HTTPS once a certificate is available. Preserve the existing CNAME file.
+Settings → Pages → Deploy from a branch → **main**, **/ (root)**. The static files need no build. `.nojekyll` bypasses Jekyll. Set Custom domain to **mix.moni.dev**, add a DNS CNAME for **mix** pointing to **rohitmoni.github.io**, and enable Enforce HTTPS once a certificate is available. Configure your desired custom domain in GitHub Pages settings; the app does not change hosting or domain settings.
 
 ## Third-party software
 
