@@ -13,7 +13,7 @@ worker.onerror=()=>{for(const j of jobs.values())j.reject(new Error('Audio proce
 function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open('mix-moni-v1',1);r.onupgradeneeded=()=>{r.result.createObjectStore('project');r.result.createObjectStore('audio');};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.onblocked=()=>reject(new Error('Close other tabs to open storage.'));});}
 function get(store,key){return new Promise((resolve,reject)=>{const r=db.transaction(store).objectStore(store).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function save(id=null,blob=null,remove=null){if(!db){status('Browser storage is unavailable. This session is not saved.',true);return;}await new Promise((resolve,reject)=>{const tx=db.transaction(['project','audio'],'readwrite');tx.objectStore('project').put(project,'current');if(id&&blob)tx.objectStore('audio').put(blob,id);if(remove)tx.objectStore('audio').delete(remove);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);}).catch(()=>{document.querySelector('.local').textContent='Session not saved';throw new Error('Browser storage is full or unavailable. The latest changes were not saved. You can still use this session.');});}
-function invalidate(){wav=null;resultPlan=null;layout=null;activeChoice=null;$('transition-section').hidden=true;for(const id of ['final-player','preview-player']){const p=$(id);p.pause();p.removeAttribute('src');p.load();}$('output').hidden=true;$('preview-player').hidden=true;if(finalUrl)URL.revokeObjectURL(finalUrl);if(previewUrl)URL.revokeObjectURL(previewUrl);finalUrl=previewUrl=null;}
+function invalidate(){scrubPointer=null;$('mix-waveform').classList.remove('scrubbing');wav=null;resultPlan=null;layout=null;activeChoice=null;$('transition-section').hidden=true;for(const id of ['final-player','preview-player']){const p=$(id);p.pause();p.removeAttribute('src');p.load();}$('output').hidden=true;$('preview-player').hidden=true;if(finalUrl)URL.revokeObjectURL(finalUrl);if(previewUrl)URL.revokeObjectURL(previewUrl);finalUrl=previewUrl=null;}
 function setBusy(v){busy=v;document.querySelectorAll('button,input').forEach(el=>el.disabled=v);if(!v){$('render').disabled=project.tracks.length<2||project.tracks.some(t=>!buffers.has(t.id));document.querySelectorAll('[data-act="up"]').forEach((b,i)=>b.disabled=i===0);document.querySelectorAll('[data-act="down"]').forEach((b,i)=>b.disabled=i===project.tracks.length-1);document.querySelectorAll('[data-field="start"],[data-field="end"]').forEach(el=>el.disabled=!buffers.has(el.closest('[data-id]').dataset.id));}}
 async function action(fn){if(busy)return;setBusy(true);try{await fn();}catch(e){status(e.message||String(e),true);}finally{setBusy(false);}}
 function flexText(){const f=project.flex;$('flex-label').textContent=f===0?'Fixed':f<35?'Low':f<70?'Medium':'High';$('flex-description').textContent=f===0?'Exact excerpt times; no tempo changes.':f<35?'Minimal timing and tempo adjustments.':f<70?'Small timing shifts and gentle tempo matching.':'Larger timing shifts and tempo adjustments.';}
@@ -97,8 +97,50 @@ function showChoice(type,i){
   }
   setBusy(busy);
 }
-function updatePlayhead(){if(!layout)return;const x=clamp($('final-player').currentTime/layout.duration*100,0,100);$('playhead').style.left=x+'%';}
+function updatePlayhead(){
+  if(!layout)return;
+  const player=$('final-player'),duration=Number.isFinite(player.duration)&&player.duration>0?player.duration:layout.duration;
+  const time=clamp(player.currentTime,0,duration),waveform=$('mix-waveform');
+  $('playhead').style.left=clamp(time/duration*100,0,100)+'%';
+  waveform.setAttribute('aria-valuemax',String(Math.round(duration)));
+  waveform.setAttribute('aria-valuenow',String(Math.round(time)));
+  waveform.setAttribute('aria-valuetext',`${formatTime(time)} of ${formatTime(duration)}`);
+}
+const waveform=$('mix-waveform');
+let scrubPointer=null;
+function seekWaveform(clientX){
+  const player=$('final-player'),bounds=waveform.getBoundingClientRect();
+  if(!wav||!layout||player.readyState<1||bounds.width<=0)return;
+  const duration=Number.isFinite(player.duration)&&player.duration>0?player.duration:layout.duration;
+  player.currentTime=clamp((clientX-bounds.left)/bounds.width,0,1)*duration;
+  updatePlayhead();
+}
+waveform.addEventListener('pointerdown',e=>{
+  if(!wav||!layout||busy||e.button!==0||!e.isPrimary)return;
+  scrubPointer=e.pointerId;waveform.setPointerCapture(e.pointerId);
+  waveform.classList.add('scrubbing');waveform.focus({preventScroll:true});
+  seekWaveform(e.clientX);e.preventDefault();
+});
+waveform.addEventListener('pointermove',e=>{if(e.pointerId===scrubPointer)seekWaveform(e.clientX);});
+function finishScrub(e){
+  if(e.pointerId!==scrubPointer)return;
+  if(e.type==='pointerup')seekWaveform(e.clientX);
+  scrubPointer=null;waveform.classList.remove('scrubbing');
+  if(waveform.hasPointerCapture(e.pointerId))waveform.releasePointerCapture(e.pointerId);
+}
+for(const event of ['pointerup','pointercancel','lostpointercapture'])waveform.addEventListener(event,finishScrub);
+waveform.addEventListener('keydown',e=>{
+  const player=$('final-player');if(!wav||!layout||busy||player.readyState<1)return;
+  const duration=Number.isFinite(player.duration)&&player.duration>0?player.duration:layout.duration;
+  let time=player.currentTime;
+  if(e.key==='ArrowLeft'||e.key==='ArrowDown')time-=e.shiftKey?15:5;
+  else if(e.key==='ArrowRight'||e.key==='ArrowUp')time+=e.shiftKey?15:5;
+  else if(e.key==='Home')time=0;else if(e.key==='End')time=duration;else return;
+  e.preventDefault();player.currentTime=clamp(time,0,duration);updatePlayhead();
+});
 $('final-player').ontimeupdate=updatePlayhead;
+$('final-player').onloadedmetadata=updatePlayhead;
+$('final-player').onseeking=updatePlayhead;
 $('close-choice').onclick=closeChoice;
 document.querySelector('.mix-map').onclick=e=>{const button=e.target.closest('[data-choice]');if(button&&!busy){showChoice(button.dataset.choice,Number(button.dataset.index));$('transition-section').scrollIntoView({behavior:'smooth',block:'nearest'});}};
 async function renderMix({focus=false}={}){

@@ -8,7 +8,7 @@ A mobile-friendly, browser-only mix maker. Live target: https://mix.moni.dev
 2. Name and order the songs, then choose each song's excerpt with start/end times (`m:ss` or seconds).
 3. Leave creative freedom at its default midpoint, or choose fixed/flexible.
 4. Create the mix. The results show a simplified waveform from the actual rendered audio, colored song sections, transition markers, playback, and downloads.
-5. Click a transition note to compare meaningful A/B options, or a pace note to compare matched and original tempo. Choosing an option re-renders playback and downloads. With no useful alternatives, the system chooses automatically. The waveform is a listening map; it has no dragging or manual transition-point controls.
+5. Click a transition note to compare meaningful A/B options, or a pace note to compare matched and original tempo. Choosing an option re-renders playback and downloads. With no useful alternatives, the system chooses automatically. Click or drag across the waveform to seek, including touch scrubbing. It stays synchronized with the audio player and preserves the current play/pause state. Arrow keys seek by five seconds (Shift: fifteen); Home/End seek to the edges. This changes playback position, not source timing or transition points.
 6. Download stereo WAV or 192 kbps MP3.
 
 Try a demo generates two original loops locally. It never replaces an existing lineup.
