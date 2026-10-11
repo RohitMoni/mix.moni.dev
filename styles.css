@@ -11,3 +11,5 @@
 /* Progressively reveal mixing controls after the song setup. */
 header{padding-top:16px;padding-bottom:16px}.import-tools{padding-bottom:20px}.import-tools .file-button{font-size:12px;padding:10px 14px;border-radius:8px}.flex-control summary{cursor:pointer;font-size:12px;font-weight:600;width:fit-content}.flex-control summary span{font-size:10px;font-weight:400;color:var(--muted);margin-left:8px}.flex-content{padding-top:18px}.mix-controls{align-items:flex-start}.render-control{min-height:34px}footer{border:0;padding-top:4px;justify-content:flex-end}footer summary{cursor:pointer}footer details[open] a{display:block;margin-top:8px}#status.sr-only{margin:0;min-height:0}
 @media(max-width:520px){.render-control{order:-1}.import-tools{align-items:stretch}.import-tools .file-button{width:fit-content}.import-tools span{margin-top:3px}}
+
+.logo span{margin:0 3px 0 0}
