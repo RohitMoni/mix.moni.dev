@@ -1,9 +1,13 @@
 import {mixLayout,drawMix} from './results.js';
 import {fetchYoutubeTitle} from './youtube.js';
-import {parseTime,formatTime,youtubeUrl,planMix,transitionDecision,wavBytes,clamp,endingDecision,timingLeeway} from './engine.js?v=5';
+import {parseTime,formatTime,youtubeUrl,planMix,transitionDecision,clamp,endingDecision,timingLeeway} from './engine.js?v=5';
 const $=id=>document.getElementById(id), SR=44100, buffers=new Map(), worker=new Worker(new URL('./worker.js?v=5',import.meta.url),{type:'module'}), jobs=new Map();
 let seq=0,db=null,context=null,busy=false,wav=null,finalUrl=null,previewUrl=null,resultPlan=null,layout=null,activeChoice=null;
 let project={tracks:[],flex:50,choices:{},tempoChoices:{},boundaryChoices:{},fillChoices:{}};
+// Native controls and programmatic previews share one playback channel.
+for(const [playing,other] of [['final-player','preview-player'],['preview-player','final-player']]){
+  $(playing).addEventListener('play',()=>$(other).pause());
+}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function status(s,error=false){$('status').textContent=s;$('status').classList.toggle('error',error);}
 function ctx(){return context||(context=new AudioContext({sampleRate:SR}));}
@@ -207,6 +211,5 @@ $('transitions').onclick=e=>{const btn=e.target.closest('button');if(!btn)return
 $('render').onclick=()=>action(async()=>{closeChoice();await renderMix({focus:true});});
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
 $('wav').onclick=()=>{if(wav)download(new Blob([wav],{type:'audio/wav'}),'mix-moni.wav');};$('mp3').onclick=()=>action(async()=>{if(!wav)return;status('Encoding MP3…');const bytes=await run('mp3',{wav,sampleRate:SR},p=>status(`Encoding MP3… ${Math.round(p*100)}%`));download(new Blob([bytes],{type:'audio/mpeg'}),'mix-moni.mp3');status('MP3 downloaded.');});
-$('demo').onclick=()=>action(async()=>{if(project.tracks.length){status('Try the demo in an empty lineup, so your songs stay safe.');return;}const names=['Neon arrival','Afterglow'];for(let k=0;k<2;k++){const seconds=32,b=ctx().createBuffer(2,seconds*SR,SR),tempo=k?124:120;for(let i=0;i<b.length;i++){const t=i/SR,beat=t*tempo/60,phase=beat%1,section=t<8?.4:t<16?.7:1,kick=Math.sin(2*Math.PI*(52*t+1.3*(1-Math.exp(-phase*20))))*Math.exp(-phase*20)*.55,hat=Math.sin(i*42.719)*Math.cos(i*12.173)*Math.exp(-(beat*2%1)*45)*.045,bass=Math.sin(2*Math.PI*(k?110:98)*t)*.05,melody=Math.sin(2*Math.PI*[293.66,349.23,440,523.25][Math.floor(beat/2)%4]*t)*.06,s=(kick+hat+bass+melody)*section*Math.min(1,t*3,(seconds-t)*3);b.getChannelData(0)[i]=s;b.getChannelData(1)[i]=s*.96;}const t=newTrack(names[k]);project.tracks.push(t);await attach(t,new File([wavBytes([b.getChannelData(0),b.getChannelData(1)],SR)],names[k]+'.wav',{type:'audio/wav'}));t.start=k?16:0;t.end=k?32:16;await save();}invalidate();display();status('Two original demo loops are ready. Click Create mix to see the result.');});
 async function init(){setBusy(true);try{db=await openDb();const saved=await get('project','current');if(saved&&Array.isArray(saved.tracks)){project=saved;project.flex=Number.isFinite(saved.flex)?saved.flex:50;project.choices=saved.choices||{};project.tempoChoices=saved.tempoChoices||{};project.boundaryChoices=saved.boundaryChoices||{};project.fillChoices=saved.fillChoices||{};for(const t of project.tracks){const f=await get('audio',t.id);if(!f)continue;if(t.url&&!t.youtubeTitle&&!t.nameEdited&&t.name===f.name?.replace(/\.[^.]+$/,''))t.name='YouTube song';status(`Restoring ${t.name}…`);try{buffers.set(t.id,await ctx().decodeAudioData(await f.arrayBuffer()));}catch{t.analysis=null;}}}status(project.tracks.some(t=>!buffers.has(t.id))?'Some audio is missing. Reattach it to continue.':project.tracks.length?'Your lineup is restored.':'Ready when you are.');}catch{status('Browser storage is unavailable. You can mix this session, but it won’t be saved.',true);document.querySelector('.local').textContent='Session only';}finally{display();setBusy(false);for(const t of project.tracks)if(t.url&&!t.youtubeTitle&&!t.nameEdited&&(t.name==='YouTube song'||t.name.startsWith('YouTube · ')))void resolveTrackTitle(t);}}
 init();
